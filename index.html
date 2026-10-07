@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>新高値デイリーボード</title>
+<style>
+:root{--bg:#f3f4f7;--panel:#fff;--ink:#1b2130;--muted:#5d6577;--line:#dfe2ea;--accent:#1f3a8a}
+@media (prefers-color-scheme: dark){:root{--bg:#10131b;--panel:#181c27;--ink:#e7e9f0;--muted:#9aa2b5;--line:#2a3040;--accent:#8fa8ff;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic",sans-serif;line-height:1.7}
+main{max-width:760px;margin:0 auto;padding:32px 16px}
+h1{font-size:1.5rem;margin:0 0 4px}
+p{color:var(--muted);margin:0 0 20px}
+.latest{display:inline-block;background:var(--accent);color:var(--panel);padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;margin-bottom:20px}
+ul{list-style:none;padding:0;margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+li{display:flex;flex-wrap:wrap;gap:4px 16px;padding:10px 14px;border-bottom:1px solid var(--line)}
+li:last-child{border-bottom:0}
+li a{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+li span{color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<h1>新高値デイリーボード</h1>
+<p>毎営業日の大引け後に更新。市況・持ち株・明日の見通し・株探ランキング・業種別騰落・Xの注目情報。売買を推奨するものではありません。</p>
+<div id="latest"></div>
+<ul id="list"><li><span>読み込み中…</span></li></ul>
+</main>
+<script>
+(async function(){
+  const list=document.getElementById('list');
+  try{
+    const r=await fetch('https://api.github.com/repos/uofu0114/stock/contents/daily');
+    const items=(await r.json()).filter(x=>x.type==='dir'&&/^\d{4}-\d{2}-\d{2}$/.test(x.name)).map(x=>x.name).sort().reverse();
+    if(!items.length){list.innerHTML='<li><span>まだページがありません</span></li>';return;}
+    document.getElementById('latest').innerHTML='<a class="latest" href="'+items[0]+'/">最新（'+items[0]+'）を開く</a>';
+    const rows=await Promise.all(items.map(async d=>{let s='';try{s=(await (await fetch('daily/'+d+'/meta.json')).json()).summary||'';}catch(e){}return [d,s];}));
+    list.innerHTML='';
+    rows.forEach(([d,s])=>{const li=document.createElement('li');const a=document.createElement('a');a.href=d+'/';a.textContent=d;const sp=document.createElement('span');sp.textContent=s;li.append(a,sp);list.append(li);});
+  }catch(e){list.innerHTML='<li><span>一覧を読み込めませんでした。時間をおいて再読み込みしてください。</span></li>';}
+})();
+</script>
+</body>
+</html>
