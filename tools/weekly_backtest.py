@@ -60,7 +60,11 @@ VARIANTS = [
 ]
 VNAME = dict(VARIANTS)
 
-JPX_URL = "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls"
+JPX_PAGE = "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
+JPX_URLS = [
+    "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xlsx",
+    "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls",
+]
 
 
 # ---------------------------------------------------------------- 銘柄一覧
@@ -68,7 +72,19 @@ def load_universe() -> pd.DataFrame:
     """東証の内国株式（プライム・スタンダード・グロース）。取れなければ daily/ の株探データから。"""
     try:
         import requests
-        r = requests.get(JPX_URL, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+        ua = {"User-Agent": "Mozilla/5.0"}
+        urls = list(JPX_URLS)
+        try:  # 一覧ページのリンクを優先（ファイル名が変わっても追従する）
+            pg = requests.get(JPX_PAGE, timeout=60, headers=ua).text
+            for h in re.findall(r'href="([^"]+data_j\.xlsx?)"', pg):
+                urls.insert(0, h if h.startswith("http") else "https://www.jpx.co.jp" + h)
+        except Exception:  # noqa: BLE001
+            pass
+        r = None
+        for u in urls:
+            r = requests.get(u, timeout=60, headers=ua)
+            if r.ok:
+                break
         r.raise_for_status()
         df = pd.read_excel(io.BytesIO(r.content), dtype=str)
         df.columns = [str(c).strip() for c in df.columns]
@@ -165,6 +181,17 @@ def synthetic_prices(n: int = 400, days: int = 1100, end: dt.date | None = None,
         prices[code] = d
         uni.append({"code": code, "name": f"テスト{k}", "market": ["プライム", "スタンダード", "グロース"][k % 3], "sector": ""})
     return pd.DataFrame(uni), prices
+
+
+def clean_prices(d: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """1日で半値以下・2倍超の動きは値幅制限上ありえないので、分割の未調整などデータの誤りとみなし、
+    その日より前のデータを捨てる。戻り値の2つ目は切り捨てたかどうか"""
+    pc = d["Close"].shift(1)
+    bad = (d["Close"] / pc < 0.55) | (d["Close"] / pc > 2.0) | (d["Open"] / pc < 0.55) | (d["Open"] / pc > 2.0)
+    if bad.any():
+        last_bad = bad[bad].index[-1]
+        return d[d.index >= last_bad], True
+    return d, False
 
 
 # ---------------------------------------------------------------- シグナルと売買
@@ -419,7 +446,10 @@ def build_report(run_date: dt.date, uni: pd.DataFrame, data: dict[str, pd.DataFr
     rows = []
     week_sigs = []
     n_enough = 0
+    n_cut = 0
     for code, raw in data.items():
+        raw, cut = clean_prices(raw)
+        n_cut += cut
         if len(raw) < HIGH_WIN + 5:
             continue
         n_enough += 1
@@ -502,7 +532,7 @@ def build_report(run_date: dt.date, uni: pd.DataFrame, data: dict[str, pd.DataFr
     H.append(f'<p class="sub"><a href="../../">新高値デイリーボード</a> ／ <a href="../">週末バックテスト一覧</a></p>')
     H.append(f'<h1>週末バックテスト　{run_date.year}年{run_date.month}月{run_date.day}日</h1>')
     H.append(f'<p class="sub">対象週 {md(week_start)}〜{md(last_day)}（最終データ {last_day:%Y-%m-%d}）／ 検証期間 {hist_start:%Y-%m-%d}〜 ／ '
-             f'検証銘柄 {n_enough:,}（株価{len(data):,}銘柄のうち上場1年以上）'
+             f'検証銘柄 {n_enough:,}（株価{len(data):,}銘柄のうち、1年以上の正常なデータがあるもの）'
              + ('　<b class="up">※合成データによる動作確認</b>' if synthetic else '') + '</p>')
     H.append('<div class="panel concl">' + "".join(f"<p>{p}</p>" for p in concl) + '</div>')
 
@@ -625,6 +655,11 @@ def build_report(run_date: dt.date, uni: pd.DataFrame, data: dict[str, pd.DataFr
         "summary": f"52週高値更新 {n_ws}銘柄（3条件すべて {n_combo}）。過去{HIST_YEARS}年・3条件すべて：勝率{fmt_pct(s_cb.get('win'), False, 0)}、1回平均{fmt_pct(s_cb.get('avg'))}、PF {s_cb.get('pf', float('nan')):.2f}。"
                    if s_cb.get("n") else f"52週高値更新 {n_ws}銘柄（3条件すべて {n_combo}）。",
         "synthetic": synthetic,
+        "universe": int(len(uni)), "priced": int(len(data)), "tested": int(n_enough), "data_cut": int(n_cut),
+        "extremes": [] if closed.empty else [
+            {"code": r["code"], "variant": r["variant"], "entry": r["entry"].strftime("%Y-%m-%d"), "exit": r["exit"].strftime("%Y-%m-%d"),
+             "entry_px": round(float(r["entry_px"]), 2), "exit_px": round(float(r["exit_px"]), 2), "ret": round(float(r["ret"]), 4)}
+            for _, r in pd.concat([closed[closed["variant"] == "all"].nsmallest(5, "ret"), closed[closed["variant"] == "all"].nlargest(5, "ret")]).iterrows()],
     }
     return "\n".join(H), summary
 
