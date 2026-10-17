@@ -1,0 +1,50 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>週末バックテスト</title><style>
+:root{--bg:#f3f4f7;--panel:#fff;--ink:#1b2130;--muted:#5d6577;--line:#dfe2ea;--accent:#1f3a8a;--accent-soft:#e7ecfb;
+--up:#c8283a;--up-soft:#fbe7ea;--down:#1f62c4;--down-soft:#e5eefb;--warn:#b26a00;--warn-soft:#fff2dc;--ok:#1d7a4f;--ok-soft:#e3f4ea}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#10131b;--panel:#181c27;--ink:#e7e9f0;--muted:#9aa2b5;--line:#2a3040;
+--accent:#8fa8ff;--accent-soft:#1e2742;--up:#ff6b7a;--up-soft:#3a1d24;--down:#6aa6ff;--down-soft:#172741;--warn:#ffb648;--warn-soft:#3a2b12;--ok:#5fd39b;--ok-soft:#14301f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10131b;--panel:#181c27;--ink:#e7e9f0;--muted:#9aa2b5;--line:#2a3040;
+--accent:#8fa8ff;--accent-soft:#1e2742;--up:#ff6b7a;--up-soft:#3a1d24;--down:#6aa6ff;--down-soft:#172741;--warn:#ffb648;--warn-soft:#3a2b12;--ok:#5fd39b;--ok-soft:#14301f;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic",sans-serif;line-height:1.7;font-size:15px}
+main{max-width:980px;margin:0 auto;padding:28px 16px 60px}
+a{color:var(--accent)}
+h1{font-size:1.5rem;margin:0 0 2px}
+h2{font-size:1.15rem;margin:34px 0 10px;padding-left:10px;border-left:4px solid var(--accent)}
+h3{font-size:1rem;margin:20px 0 8px}
+.sub{color:var(--muted);margin:0 0 18px;font-size:.9rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.concl p{margin:0 0 10px}.concl p:last-child{margin:0}
+.rule{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.rule div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.rule b{display:block;font-size:.8rem;color:var(--muted);font-weight:600}
+.tw{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{background:var(--accent-soft);color:var(--ink);font-weight:700;position:sticky;top:0}
+td.l,th.l{text-align:left}
+tr:last-child td{border-bottom:0}
+td{font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.down{color:var(--down)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
+.p-hold{background:var(--ok-soft);color:var(--ok)}.p-exit{background:var(--warn-soft);color:var(--warn)}
+.p-pend{background:var(--accent-soft);color:var(--accent)}.p-closed{background:var(--line);color:var(--muted)}
+.ok{color:var(--ok);font-weight:700}.ng{color:var(--muted)}
+.hl td{background:var(--accent-soft)}
+details{margin-top:10px}summary{cursor:pointer;color:var(--accent);font-weight:600}
+.note{color:var(--muted);font-size:.85rem}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.82rem;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+
+ul{list-style:none;padding:0;margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+li{display:flex;flex-wrap:wrap;gap:4px 16px;padding:10px 14px;border-bottom:1px solid var(--line)}li:last-child{border-bottom:0}
+li a{font-weight:700}li span{color:var(--muted);font-size:.9rem}
+.latest{display:inline-block;background:var(--accent);color:var(--panel);padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;margin-bottom:20px}
+</style></head><body><main>
+<p class="sub"><a href="../">新高値デイリーボード</a></p>
+<h1>週末バックテスト</h1>
+<p class="sub">毎週土曜の朝に自動更新。今週の52週高値ブレイク銘柄を「翌日寄付で買い・20日安値割れで売り」のルールで検証し、過去3年の成績と比べます。売買を推奨するものではありません。</p>
+<a class="latest" href="2026-10-17/">最新（2026-10-17）を開く</a><ul><li><a href="2026-10-17/">2026-10-17</a><span>52週高値更新 186銘柄（3条件すべて 69）。過去3年・3条件すべて：勝率41%、1回平均+5.3%、PF 1.78。</span></li></ul></main></body></html>
