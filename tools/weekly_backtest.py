@@ -275,6 +275,18 @@ def stats(tr: pd.DataFrame) -> dict:
         return {"n": 0}
     r = c["ret"]
     w, l = r[r > 0], r[r <= 0]
+    # 決済日順に並べた累計損益から、最大ドローダウン（山から谷への最大の落ち込み）と最大連敗
+    cs = c.sort_values(["exit", "entry"])
+    seq = cs["ret"].to_numpy()
+    exits = list(cs["exit"])
+    cum = np.concatenate([[0.0], np.cumsum(seq) * TRADE_YEN])
+    dd = cum - np.maximum.accumulate(cum)
+    trough = int(dd.argmin())
+    peak = int(cum[:trough + 1].argmax())
+    streak = best_streak = 0
+    for x in seq:
+        streak = streak + 1 if x <= 0 else 0
+        best_streak = max(best_streak, streak)
     return {
         "n": int(len(c)),
         "win": float((r > 0).mean()),
@@ -288,7 +300,26 @@ def stats(tr: pd.DataFrame) -> dict:
         "worst": float(r.min()),
         "pnl": float(r.sum() * TRADE_YEN),
         "open": int((tr["status"].isin(["open", "exit_next"])).sum()),
+        "mdd": float(dd.min()),
+        "mdd_peak": None if dd.min() >= 0 or peak == 0 else exits[peak - 1].strftime("%Y-%m-%d"),
+        "mdd_trough": None if dd.min() >= 0 else exits[trough - 1].strftime("%Y-%m-%d"),
+        "max_losing_streak": int(best_streak),
     }
+
+
+HOLD_BUCKETS = [(0, 5, "5日以内"), (6, 20, "6〜20日"), (21, 60, "21〜60日"), (61, 120, "61〜120日"), (121, 10**9, "121日以上")]
+
+
+def hold_stats(tr: pd.DataFrame) -> dict:
+    """保有日数（営業日）の区分ごとの回数・勝率・1回平均・累計損益"""
+    c = tr[tr["status"] == "closed"]
+    out = {}
+    for lo, hi, name in HOLD_BUCKETS:
+        g = c[(c["days"] >= lo) & (c["days"] <= hi)]
+        if len(g):
+            out[name] = {"n": int(len(g)), "share": float(len(g) / len(c)), "win": float((g["ret"] > 0).mean()),
+                         "avg": float(g["ret"].mean()), "pnl": float(g["ret"].sum() * TRADE_YEN)}
+    return out
 
 
 def max_concurrent(tr: pd.DataFrame, last_day: pd.Timestamp) -> int:
@@ -478,6 +509,7 @@ def build_report(run_date: dt.date, uni: pd.DataFrame, data: dict[str, pd.DataFr
     st = {v: stats(tr[tr["variant"] == v]) for v, _ in VARIANTS}
     for v, _ in VARIANTS:
         st[v]["maxpos"] = max_concurrent(tr[tr["variant"] == v], last_day)
+    hs = {v: hold_stats(tr[tr["variant"] == v]) for v, _ in VARIANTS}
 
     # 年別（決済日ベースではなく買い日ベース）
     yearly = {}
@@ -607,22 +639,47 @@ def build_report(run_date: dt.date, uni: pd.DataFrame, data: dict[str, pd.DataFr
     # 過去検証
     H.append(f'<h2>過去{HIST_YEARS}年の検証（{hist_start:%Y-%m-%d}〜）</h2>')
     H.append('<div class="tw"><table><tr><th class="l">パターン</th><th>売買回数</th><th>勝率</th><th>1回平均</th><th>中央値</th><th>勝ち平均</th><th>負け平均</th>'
-             '<th>損益比 PF</th><th>平均保有日数</th><th>最大の勝ち</th><th>最大の負け</th><th>累計損益</th><th>最大同時保有</th></tr>')
+             '<th>損益比 PF</th><th>平均保有日数</th><th>最大の勝ち</th><th>最大の負け</th><th>累計損益</th><th>最大ドローダウン</th><th>最大連敗</th><th>最大同時保有</th></tr>')
     for v, nm in VARIANTS:
         s = st[v]
         if not s.get("n"):
-            H.append(f'<tr><td class="l">{esc(nm)}</td><td colspan="12" class="l">決済済みのトレードなし</td></tr>')
+            H.append(f'<tr><td class="l">{esc(nm)}</td><td colspan="14" class="l">決済済みのトレードなし</td></tr>')
             continue
         pf = "∞" if math.isinf(s["pf"]) else f'{s["pf"]:.2f}'
         H.append(f'<tr{" class=hl" if v == "combo" else ""}><td class="l">{esc(nm)}</td><td>{s["n"]:,}</td><td>{fmt_pct(s["win"], False, 0)}</td>'
                  f'<td class="{cls_ret(s["avg"])}">{fmt_pct(s["avg"])}</td><td class="{cls_ret(s["med"])}">{fmt_pct(s["med"])}</td>'
                  f'<td class="up">{fmt_pct(s["avg_win"])}</td><td class="down">{fmt_pct(s["avg_loss"])}</td><td>{pf}</td><td>{s["days"]:.0f}日</td>'
                  f'<td class="up">{fmt_pct(s["best"], True, 0)}</td><td class="down">{fmt_pct(s["worst"], True, 0)}</td>'
-                 f'<td class="{cls_ret(s["pnl"])}">{s["pnl"] / 1e4:+,.0f}万円</td><td>{s["maxpos"]}銘柄</td></tr>')
+                 f'<td class="{cls_ret(s["pnl"])}">{s["pnl"] / 1e4:+,.0f}万円</td>'
+                 f'<td class="down">{s["mdd"] / 1e4:,.0f}万円</td><td>{s["max_losing_streak"]}回</td><td>{s["maxpos"]}銘柄</td></tr>')
     H.append('</table></div>')
-    H.append(f'<p class="note">累計損益は「シグナルが出るたびに100万円ずつ買った」場合の合計。最大同時保有は、それを実行するのに必要だった同時保有数（×100万円が必要資金の目安）。</p>')
+    H.append(f'<p class="note">累計損益は「シグナルが出るたびに100万円ずつ買った」場合の合計。最大同時保有は、それを実行するのに必要だった同時保有数（×100万円が必要資金の目安）。'
+             '最大ドローダウンは、累計損益が途中の最高点からどれだけ落ち込んだかの最大値（決済日ベース。保有中の含み損は含まない）。'
+             '最大連敗は決済日順に負けが続いた最大回数。</p>')
+    dd_rows = [(nm, st[v]) for v, nm in VARIANTS if st[v].get("mdd_trough")]
+    if dd_rows:
+        H.append('<p class="note">最大ドローダウンの期間：' + "／".join(
+            f'{esc(nm)} {s["mdd_peak"] or "開始時"}→{s["mdd_trough"]}' for nm, s in dd_rows) + '</p>')
 
     H.append('<h3>累計損益の推移（決済日順）</h3><div class="chart">' + cum_chart(tr, hist_start, last_day) + '</div>')
+
+    # 保有日数別
+    if any(hs.values()):
+        H.append('<h3>保有日数別の成績</h3><div class="tw"><table><tr><th class="l">パターン</th>'
+                 + "".join(f'<th>{esc(b[2])}</th>' for b in HOLD_BUCKETS) + '</tr>')
+        for v, nm in VARIANTS:
+            cells = []
+            for b in HOLD_BUCKETS:
+                x = hs[v].get(b[2])
+                if x:
+                    cells.append(f'<td><span class="{cls_ret(x["avg"])}">{fmt_pct(x["avg"])}</span><br>'
+                                 f'<span class="note">{x["n"]:,}回（{x["share"] * 100:.0f}%）・勝率{x["win"] * 100:.0f}%</span><br>'
+                                 f'<span class="note {cls_ret(x["pnl"])}">{x["pnl"] / 1e4:+,.0f}万円</span></td>')
+                else:
+                    cells.append('<td>—</td>')
+            H.append(f'<tr{" class=hl" if v == "combo" else ""}><td class="l">{esc(nm)}</td>{"".join(cells)}</tr>')
+        H.append('</table></div><p class="note">保有日数は買い日から売り日までの営業日数。上段が1回平均の損益、中段が回数（全体に占める割合）と勝率、下段が累計損益。'
+                 'すぐ損切りになる短期の負けを、長く持てた大きな勝ちで取り返せているかを確認するための表です。</p>')
 
     # 年別
     years = sorted({y for v in yearly for y in yearly[v]})
@@ -654,6 +711,7 @@ def build_report(run_date: dt.date, uni: pd.DataFrame, data: dict[str, pd.DataFr
         "stats": {v: {k: (None if isinstance(x, float) and (math.isnan(x) or math.isinf(x)) else x) for k, x in st[v].items()} for v, _ in VARIANTS},
         "summary": f"52週高値更新 {n_ws}銘柄（3条件すべて {n_combo}）。過去{HIST_YEARS}年・3条件すべて：勝率{fmt_pct(s_cb.get('win'), False, 0)}、1回平均{fmt_pct(s_cb.get('avg'))}、PF {s_cb.get('pf', float('nan')):.2f}。"
                    if s_cb.get("n") else f"52週高値更新 {n_ws}銘柄（3条件すべて {n_combo}）。",
+        "hold": hs,
         "synthetic": synthetic,
         "universe": int(len(uni)), "priced": int(len(data)), "tested": int(n_enough), "data_cut": int(n_cut),
         "extremes": [] if closed.empty else [
