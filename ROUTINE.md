@@ -48,20 +48,18 @@ const f=r=>[r[0],r[1],r[2],r[5],r[7],r[8],r[9],r[10],r[11],r[12]].join('|');
            "7685":{"closes":"10/07:2765 ...","lines":[[2681,"損切 2,681","var(--warn)"],[2923,"25日線 2,923","var(--muted)"]]}}}
 ```
 
-## 4. 公開（GitHub へのコミットはブラウザペインで行う）
-クラウド側からは GitHub に書き込めないため、ブラウザペイン（uofu0114 でログイン済み）の GitHub 画面からファイルを作成する。1 ファイルずつ次を繰り返す。
-1. `https://github.com/uofu0114/stock/new/main?filename=<パス>` を開く（例 `daily/2026-10-08/mid.html`）。
-2. javascript_tool で本文を貼り付ける：
-```js
-const txt = <ファイル内容の文字列>;  // 長い本文は関数のブロックコメントに埋め込んで toString() し、前後を切り取ると、引用符やバッククォートをエスケープせずに渡せる（本文にコメント終端の記号が無いこと）
-const el=document.querySelector('.cm-content');el.focus();const dt=new DataTransfer();dt.setData('text/plain',txt);
-el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));
-await new Promise(r=>setTimeout(r,500));
-[...document.querySelectorAll('button')].find(b=>b.innerText.trim()==='Commit changes...').click();
-await new Promise(r=>setTimeout(r,1500));
-[...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b=>b.innerText.trim()==='Commit changes').click();
+## 4. 公開（クラウド側の git で push する）
+GitHub への書き込みはブラウザではなく、クラウドの作業ディレクトリの git で行う（定期タスクに uofu0114/stock が接続済みなので、ログイン不要で push できる）。
+1. 作業の最初に `git clone --depth 1 https://github.com/uofu0114/stock` で取得した作業コピーに、4 ファイルを書き込む。
+2. まとめて 1 回でコミットして push する。
+```sh
+git add daily/D/mid.html daily/D/data.txt daily/D/meta.json D/index.html
+git commit -m "デイリーボード D"
+git -c push.negotiate=true push origin HEAD:main
 ```
-3. `https://raw.githubusercontent.com/uofu0114/stock/main/<パス>` を fetch して、中身が意図どおりか確認する。
+   push が non-fast-forward で拒否されたら（週末バックテストなど別のコミットが先に入った場合）、`git fetch --depth=50 origin main && git rebase origin/main` のあと、もう一度 push する。同じパスのファイルがすでにあっても、上書きしてコミットすればよい。
+3. `git fetch --depth=1 origin main && git diff --stat HEAD origin/main` で差分が無いこと（= push が反映されたこと）を確認する。
+4. push が 2 回とも失敗したときだけ、予備としてブラウザペインの GitHub 画面（`https://github.com/uofu0114/stock/new/main?filename=<パス>`）から 1 ファイルずつ作成する。その場合は報告に「git push 失敗のためブラウザで公開」と書く。
 
 毎日作るファイルは 4 つ：`daily/D/mid.html`、`daily/D/data.txt`、`daily/D/meta.json`（summary 付き）、`D/index.html`（下の固定の中身）。
 ```html
